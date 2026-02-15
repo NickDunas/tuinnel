@@ -66,6 +66,12 @@ export async function purgeCommand(): Promise<void> {
     }
   }
 
+  if (!process.stdin.isTTY) {
+    logger.error('Cannot prompt for confirmation in non-interactive mode.\nRe-run in an interactive terminal.');
+    process.exitCode = 2;
+    return;
+  }
+
   const answer = await prompt('\nClean up these resources? (y/N) ');
   if (answer.toLowerCase() !== 'y') {
     logger.info('Cancelled.');

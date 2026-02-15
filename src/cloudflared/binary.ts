@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, chmodSync, readFileSync, writeFileSync, unlinkSy
 import { join } from 'path';
 import { homedir } from 'os';
 import { createHash } from 'crypto';
-import { execSync } from 'child_process';
+import { execSync, execFileSync } from 'child_process';
 import { pipeline } from 'stream/promises';
 import { Readable } from 'stream';
 
@@ -45,7 +45,7 @@ export function getInstalledVersion(): string | null {
     return null;
   }
   try {
-    const output = execSync(`${BINARY_PATH} version --short`, {
+    const output = execFileSync(BINARY_PATH, ['version', '--short'], {
       encoding: 'utf-8',
       timeout: 5000,
     });
@@ -169,7 +169,7 @@ export async function downloadBinary(
   // Extract or move binary
   if (isTarball(asset)) {
     // macOS: extract .tgz archive
-    execSync(`tar -xzf "${tmpPath}" -C "${BIN_DIR}"`, { timeout: 10000 });
+    execFileSync('tar', ['-xzf', tmpPath, '-C', BIN_DIR], { timeout: 10000 });
     unlinkSync(tmpPath);
   } else {
     // Linux: rename bare binary

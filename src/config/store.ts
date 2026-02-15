@@ -16,7 +16,17 @@ export function readConfig(): Config | null {
   }
 
   const raw = readFileSync(CONFIG_PATH, 'utf-8');
-  const json = JSON.parse(raw);
+
+  let json: unknown;
+  try {
+    json = JSON.parse(raw);
+  } catch {
+    throw new Error(
+      `Corrupted config at ${CONFIG_PATH}: file is not valid JSON.\n` +
+      `Delete the file and run \`tuinnel init\` to reconfigure.`
+    );
+  }
+
   const result = ConfigSchema.safeParse(json);
 
   if (!result.success) {

@@ -1,4 +1,4 @@
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import { existsSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
@@ -78,14 +78,14 @@ export async function doctorCommand(): Promise<void> {
       name: 'cloudflared binary',
       run: async () => {
         try {
-          const version = execSync('cloudflared version --short 2>/dev/null', { encoding: 'utf-8' }).trim();
+          const version = execFileSync('cloudflared', ['version', '--short'], { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'ignore'] }).trim();
           return { ok: true, detail: `Version ${version}` };
         } catch {
           // Check tuinnel-managed binary
           try {
             const binPath = join(homedir(), '.tuinnel', 'bin', 'cloudflared');
             if (existsSync(binPath)) {
-              const version = execSync(`"${binPath}" version --short 2>/dev/null`, { encoding: 'utf-8' }).trim();
+              const version = execFileSync(binPath, ['version', '--short'], { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'ignore'] }).trim();
               return { ok: true, detail: `Version ${version} (managed)` };
             }
           } catch {

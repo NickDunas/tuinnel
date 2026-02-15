@@ -67,14 +67,17 @@ export function spawnCloudflared(
       child.kill('SIGTERM');
 
       // Wait up to 5s for graceful exit, then SIGKILL
+      let timer: ReturnType<typeof setTimeout>;
       const exited = await Promise.race([
         new Promise<boolean>((resolve) => {
           child.once('exit', () => resolve(true));
         }),
         new Promise<boolean>((resolve) => {
-          setTimeout(() => resolve(false), 5000);
+          timer = setTimeout(() => resolve(false), 5000);
         }),
       ]);
+
+      clearTimeout(timer!);
 
       if (!exited && child.exitCode === null) {
         child.kill('SIGKILL');
