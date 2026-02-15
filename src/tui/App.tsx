@@ -5,6 +5,7 @@ import { platform } from 'os';
 import type { TunnelRuntime } from '../types.js';
 import type { TunnelService } from '../services/tunnel-service.js';
 import { copyToClipboard } from '../utils/clipboard.js';
+import { readConfig, writeConfig, getDefaultConfig, configExists } from '../config/store.js';
 import { Sidebar } from './Sidebar.js';
 import { MainPanel } from './MainPanel.js';
 import { HelpBar } from './HelpBar.js';
@@ -247,8 +248,13 @@ export function App({ tunnelService, zones, defaultZone, onShutdown, initialMode
     dispatch({ type: 'SET_MODAL', modal: null });
   };
 
-  const handleOnboardingComplete = async (config: { apiToken: string; defaultZone: string; accountId: string }) => {
-    // Onboarding complete — transition to empty state (caller handles config persistence)
+  const handleOnboardingComplete = async (onboardingConfig: { apiToken: string; defaultZone: string; accountId: string }) => {
+    const config = configExists() ? readConfig() ?? getDefaultConfig() : getDefaultConfig();
+    config.apiToken = onboardingConfig.apiToken;
+    if (onboardingConfig.defaultZone) {
+      config.defaultZone = onboardingConfig.defaultZone;
+    }
+    writeConfig(config);
     dispatch({ type: 'SET_MODE', mode: 'empty' });
   };
 
