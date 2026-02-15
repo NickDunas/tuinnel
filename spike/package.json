@@ -1,0 +1,20 @@
+{
+  "name": "ink-spike",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node --loader tsx app.tsx",
+    "test": "node --loader tsx test.tsx"
+  },
+  "dependencies": {
+    "ink": "^6.7.0",
+    "react": "^19.2.4",
+    "@inkjs/ui": "^2.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.13",
+    "ink-testing-library": "^4.0.0",
+    "tsx": "^4.0.0"
+  }
+}
