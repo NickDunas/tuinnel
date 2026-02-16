@@ -214,6 +214,8 @@ All 5 checks passed.
 | `tuinnel down --all` | Stop all running tunnels |
 | `tuinnel down <name> --clean` | Stop a tunnel and delete its DNS record and tunnel from Cloudflare |
 | `tuinnel add <port>` | Add a tunnel mapping to config (does not start it) |
+| `tuinnel add <port> --subdomain <name>` | Add with explicit subdomain (non-interactive) |
+| `tuinnel add <port> --adopt` | Adopt an existing Cloudflare tunnel |
 | `tuinnel remove <name>` | Remove a tunnel mapping from config |
 | `tuinnel list` | List all configured tunnels |
 | `tuinnel status` | Show running tunnels with health status |
@@ -221,14 +223,23 @@ All 5 checks passed.
 | `tuinnel doctor` | Run diagnostics (token, permissions, binary, network) |
 | `tuinnel purge` | Find and remove orphaned tunnels and DNS records |
 
-### Global flags
+### Aliases
 
-| Flag | Description |
+| Alias | Equivalent |
 |---|---|
-| `--verbose` | Enable verbose output |
-| `--json` | Output in JSON format (for `list`, `status`, `zones`) |
-| `--help` | Show help for any command |
-| `--version` | Show version |
+| `tuinnel start` | `tuinnel up` |
+| `tuinnel stop` | `tuinnel down` |
+| `tuinnel rm` | `tuinnel remove` |
+| `tuinnel ls` | `tuinnel list` |
+
+### Flags
+
+| Flag | Scope | Description |
+|---|---|---|
+| `--verbose` | Global | Enable verbose output |
+| `--json` | `list`, `status`, `zones` | Output in JSON format |
+| `-v`, `--version` | Global | Show version |
+| `--help` | Global | Show help for any command |
 
 ## TUI Keyboard Shortcuts
 
@@ -241,33 +252,24 @@ All 5 checks passed.
 | `?` | Full help overlay (dismissible with any key) |
 | `Tab` | Switch focus: sidebar / main panel |
 | `1` `2` `3` | Switch main panel tab (Details / Logs / Metrics) |
+| `Up` / `Down` / `k` / `j` | Navigate tunnel list |
+| `c` | Copy public URL to clipboard |
+| `o` | Open public URL in browser |
 
 ### Sidebar Focused
 
 | Key | Action |
 |---|---|
-| `Up` / `Down` / `k` / `j` | Navigate tunnel list |
 | `e` | Edit selected tunnel |
 | `d` | Delete selected tunnel (with confirmation) |
 | `s` | Start/stop selected tunnel |
 | `r` | Restart selected tunnel |
-| `c` | Copy public URL to clipboard |
-| `o` | Open public URL in browser |
-
-### Logs Tab Focused
-
-| Key | Action |
-|---|---|
-| `Up` / `Down` | Scroll log view |
-| `/` | Filter logs |
-| `Esc` | Clear filter |
 
 ### Modal Active
 
 | Key | Action |
 |---|---|
 | `Tab` | Next field |
-| `Shift+Tab` | Previous field |
 | `Enter` | Confirm / Submit |
 | `Esc` | Cancel / Close modal |
 | `Up` / `Down` | Navigate select lists |
@@ -286,8 +288,7 @@ When you run `tuinnel 3000`:
 2. Creates a named tunnel on Cloudflare (or reuses an existing one)
 3. Configures the tunnel's ingress rules to route traffic to `localhost:3000`
 4. Creates a DNS CNAME record pointing your subdomain to the tunnel
-5. Spawns a `cloudflared` connector process
-6. Shows live metrics and logs in the dashboard
+5. Spawns a `cloudflared` connector process with live metrics and logs in the dashboard
 
 Tunnels are named with a `tuinnel-` prefix on Cloudflare to avoid collisions with other tools.
 
