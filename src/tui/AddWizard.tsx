@@ -3,6 +3,7 @@ import { Box, Text, useInput } from 'ink';
 import { TextInput } from '@inkjs/ui';
 import { Modal } from './Modal.js';
 import { suggestSubdomain } from '../config/port-map.js';
+import { validatePort, validateSubdomain } from '../utils/validation.js';
 
 export interface AddWizardProps {
   defaultZone: string;
@@ -45,8 +46,8 @@ export function AddWizard({ defaultZone, zones, onSubmit, onCancel }: AddWizardP
   });
 
   function handlePortSubmit(value: string) {
-    const num = parseInt(value, 10);
-    if (isNaN(num) || num < 1 || num > 65535) {
+    const num = validatePort(value, false);
+    if (num === null) {
       setPortError('Port must be 1-65535');
       return;
     }
@@ -60,12 +61,14 @@ export function AddWizard({ defaultZone, zones, onSubmit, onCancel }: AddWizardP
 
   function handleSubdomainSubmit(value: string) {
     if (!value.trim()) return;
-    setSubdomain(value);
+    const normalized = validateSubdomain(value, false);
+    if (normalized === null) return;
+    setSubdomain(normalized);
     // Skip zone selection if only one zone
     if (zones.length <= 1) {
       onSubmit({
         port: parseInt(port, 10),
-        subdomain: value,
+        subdomain: normalized,
         zone: zones.length === 1 ? zones[0].name : defaultZone,
       });
     } else {

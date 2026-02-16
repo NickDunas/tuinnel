@@ -57,7 +57,7 @@ describe('cfFetch', () => {
     expect(capturedHeaders?.get('Authorization')).toBe('Bearer my-test-token');
   });
 
-  test('adds Content-Type header', async () => {
+  test('adds Content-Type header only when body is present', async () => {
     let capturedHeaders: Headers | undefined;
     globalThis.fetch = async (input: string | URL | Request, init?: RequestInit) => {
       capturedHeaders = new Headers(init?.headers);
@@ -67,7 +67,12 @@ describe('cfFetch', () => {
       });
     };
 
+    // GET request (no body) should NOT have Content-Type
     await cfFetch('/test', z.string(), 'token');
+    expect(capturedHeaders?.get('Content-Type')).toBeNull();
+
+    // POST request (with body) should have Content-Type
+    await cfFetch('/test', z.string(), 'token', { method: 'POST', body: { foo: 'bar' } });
     expect(capturedHeaders?.get('Content-Type')).toBe('application/json');
   });
 

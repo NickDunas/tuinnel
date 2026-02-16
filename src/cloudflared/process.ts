@@ -1,5 +1,8 @@
 import { spawn, type ChildProcess } from 'child_process';
 import { createInterface } from 'readline';
+import { writeFileSync, chmodSync, unlinkSync } from 'fs';
+import { join } from 'path';
+import { tmpdir } from 'os';
 
 export interface SpawnOptions {
   metricsAddr?: string;
@@ -25,7 +28,19 @@ export function spawnCloudflared(
     protocol = 'quic',
   } = options;
 
-  // IMPORTANT: flags go BEFORE 'run', --token goes AFTER 'run'
+  // Write token to temp file with secure permissions (0600) to avoid exposing it in `ps aux`
+  const tokenFileName = `tuinnel-token-${Date.now()}-${Math.random().toString(36).slice(2, 9)}.txt`;
+  const tokenFilePath = join(tmpdir(), tokenFileName);
+
+  try {
+    writeFileSync(tokenFilePath, connectorToken, { mode: 0o600 });
+    chmodSync(tokenFilePath, 0o600);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    throw new Error(`Failed to create secure token file: ${message}`);
+  }
+
+  // IMPORTANT: flags go BEFORE 'run', --token-file goes AFTER 'run'
   const args = [
     'tunnel',
     '--config', '/dev/null',
@@ -34,12 +49,23 @@ export function spawnCloudflared(
     '--loglevel', loglevel,
     '--protocol', protocol,
     'run',
-    '--token', connectorToken,
+    '--token-file', tokenFilePath,
   ];
 
   const child = spawn(binaryPath, args, {
     stdio: ['ignore', 'pipe', 'pipe'],
     detached: false,
+  });
+
+  // Schedule token file cleanup after cloudflared reads it (500ms)
+  const cleanupTimer = setTimeout(() => {
+    try { unlinkSync(tokenFilePath); } catch {}
+  }, 500);
+
+  // Clean up immediately if child exits early
+  child.once('exit', () => {
+    clearTimeout(cleanupTimer);
+    try { unlinkSync(tokenFilePath); } catch {}
   });
 
   const stderrCallbacks: Array<(line: string) => void> = [];

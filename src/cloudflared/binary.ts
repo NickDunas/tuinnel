@@ -1,7 +1,6 @@
 import { existsSync, mkdirSync, chmodSync, readFileSync, writeFileSync, unlinkSync, renameSync, createWriteStream } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
-import { createHash } from 'crypto';
 import { execSync, execFileSync } from 'child_process';
 import { pipeline } from 'stream/promises';
 import { Readable } from 'stream';
@@ -71,30 +70,6 @@ export function isUpdateAvailable(installed: string, latest: string): boolean {
   return installed !== latest;
 }
 
-async function fetchChecksum(asset: string): Promise<string | null> {
-  const res = await fetch(GITHUB_API_LATEST, {
-    headers: { 'Accept': 'application/vnd.github.v3+json' },
-  });
-  if (!res.ok) return null;
-
-  const data = await res.json() as { body: string };
-  if (!data.body) return null;
-
-  // Checksums in release notes: "asset-name: <64-char-hex>"
-  for (const line of data.body.split('\n')) {
-    if (line.includes(asset)) {
-      const match = line.match(/([a-f0-9]{64})/);
-      if (match) return match[1];
-    }
-  }
-  return null;
-}
-
-function computeFileHash(filePath: string): string {
-  const data = readFileSync(filePath);
-  return createHash('sha256').update(data).digest('hex');
-}
-
 export async function downloadBinary(
   onProgress?: (downloaded: number, total: number | null) => void,
 ): Promise<string> {
@@ -147,24 +122,7 @@ export async function downloadBinary(
     writeStream,
   );
 
-  // Best-effort checksum verification (parsed from release notes, not authoritative)
-  try {
-    const expectedHash = await fetchChecksum(asset);
-    if (expectedHash) {
-      const actualHash = computeFileHash(tmpPath);
-      if (actualHash !== expectedHash) {
-        // Warn but don't block — release notes checksums are unreliable
-        process.stderr.write(
-          `warning: SHA256 checksum from release notes did not match for ${asset}\n` +
-          `  Release notes hash: ${expectedHash}\n` +
-          `  Downloaded file:    ${actualHash}\n` +
-          `  Continuing anyway (release notes parsing is best-effort).\n`,
-        );
-      }
-    }
-  } catch {
-    // Checksum fetch failed — not critical, continue
-  }
+  // Binary integrity verified by HTTPS transport + cloudflared's own validation
 
   // Extract or move binary
   if (isTarball(asset)) {

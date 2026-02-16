@@ -1,4 +1,5 @@
 import { readConfig, writeConfig } from '../config/store.js';
+import { isRunning } from '../cloudflared/pid.js';
 import { logger } from '../utils/logger.js';
 
 export async function removeCommand(name: string, _options: Record<string, unknown>): Promise<void> {
@@ -6,7 +7,8 @@ export async function removeCommand(name: string, _options: Record<string, unkno
 
   if (!config) {
     logger.error('No configuration found. Nothing to remove.');
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
 
   if (!config.tunnels[name]) {
@@ -17,7 +19,16 @@ export async function removeCommand(name: string, _options: Record<string, unkno
     } else {
       console.error('\nNo tunnels configured.');
     }
-    process.exit(1);
+    process.exitCode = 1;
+    return;
+  }
+
+  // Warn if tunnel is currently running
+  const status = isRunning(name);
+  if (status.running) {
+    logger.warn(`Tunnel "${name}" is currently running (PID ${status.pid}). Stop it first with \`tuinnel down ${name}\`.`);
+    process.exitCode = 1;
+    return;
   }
 
   const tunnel = config.tunnels[name];

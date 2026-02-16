@@ -1,9 +1,9 @@
 import { getRunningTunnels, removePid } from '../cloudflared/pid.js';
-import { readConfig, getToken } from '../config/store.js';
+import { readConfig, writeConfig, getToken } from '../config/store.js';
 import { discoverAccountId, listDnsRecords, deleteDnsRecord, deleteTunnel, getTunnelByName, getAllZones } from '../cloudflare/api.js';
 import type { DNSRecord } from '../cloudflare/types.js';
 import { logger } from '../utils/logger.js';
-import { createInterface } from 'readline';
+import { confirm } from '../utils/prompt.js';
 
 interface DownOptions {
   clean?: boolean;
@@ -92,6 +92,8 @@ async function stopOne(
 
   if (clean) {
     await cleanupCloudflare(tunnel.name);
+    // Also remove from local config
+    removeTunnelFromConfig(tunnel.name);
   }
 }
 
@@ -160,6 +162,18 @@ async function cleanupCloudflare(name: string): Promise<void> {
   }
 }
 
+function removeTunnelFromConfig(name: string): void {
+  try {
+    const config = readConfig();
+    if (!config || !config.tunnels[name]) return;
+    delete config.tunnels[name];
+    writeConfig(config);
+    logger.success(`Removed "${name}" from local config`);
+  } catch {
+    // Non-fatal: config may not exist
+  }
+}
+
 function waitForProcessExit(pid: number, timeout: number): Promise<boolean> {
   return new Promise((resolve) => {
     const start = Date.now();
@@ -181,15 +195,3 @@ function waitForProcessExit(pid: number, timeout: number): Promise<boolean> {
   });
 }
 
-function confirm(prompt: string): Promise<boolean> {
-  return new Promise((resolve) => {
-    const rl = createInterface({
-      input: process.stdin,
-      output: process.stderr,
-    });
-    rl.question(prompt, (answer) => {
-      rl.close();
-      resolve(answer.toLowerCase() === 'y');
-    });
-  });
-}

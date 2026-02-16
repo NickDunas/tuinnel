@@ -7,7 +7,7 @@ export default defineConfig({
   target: 'node20',
   platform: 'node',
   splitting: false,
-  sourcemap: true,
+  sourcemap: false,
   clean: true,
   dts: false,
   // Rollup tree-shaking for dead code elimination.

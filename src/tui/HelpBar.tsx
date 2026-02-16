@@ -1,5 +1,6 @@
 import React from 'react';
 import { Box, Text } from 'ink';
+import { color } from './use-color.js';
 
 export interface HelpBarProps {
   focusedPanel: 'sidebar' | 'main';
@@ -94,7 +95,7 @@ export function HelpBar(props: HelpBarProps) {
   if (notification) {
     return (
       <Box>
-        <Text color="green">{' '}{notification}</Text>
+        <Text color={color('green')}>{' '}{notification}</Text>
       </Box>
     );
   }

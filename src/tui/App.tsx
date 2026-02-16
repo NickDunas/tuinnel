@@ -1,6 +1,6 @@
 import React, { useReducer, useEffect } from 'react';
 import { Box, Text, useInput, useStdin, useStdout, useApp } from 'ink';
-import { execFileSync } from 'child_process';
+import { spawn as spawnChild } from 'child_process';
 import { platform } from 'os';
 import type { TunnelRuntime } from '../types.js';
 import type { TunnelService } from '../services/tunnel-service.js';
@@ -46,7 +46,8 @@ type Action =
   | { type: 'SET_TAB'; tab: TabName }
   | { type: 'TOGGLE_HELP' }
   | { type: 'SET_NOTIFICATION'; message: string }
-  | { type: 'CLEAR_NOTIFICATION' };
+  | { type: 'CLEAR_NOTIFICATION' }
+  | { type: 'TICK' };
 
 function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
@@ -109,6 +110,9 @@ function reducer(state: AppState, action: Action): AppState {
 
     case 'CLEAR_NOTIFICATION':
       return { ...state, notification: null };
+
+    case 'TICK':
+      return { ...state };
 
     default:
       return state;
@@ -179,6 +183,13 @@ export function App({ tunnelService, zones, defaultZone, onShutdown, initialMode
       tunnelService.off('tunnelRemoved', onRemoved);
     };
   }, [tunnelService]);
+
+  // Uptime auto-refresh: force re-render every second in dashboard mode
+  useEffect(() => {
+    if (state.mode !== 'dashboard') return;
+    const id = setInterval(() => dispatch({ type: 'TICK' }), 1000);
+    return () => clearInterval(id);
+  }, [state.mode]);
 
   // Clear notification after 2 seconds
   useEffect(() => {
@@ -259,7 +270,14 @@ export function App({ tunnelService, zones, defaultZone, onShutdown, initialMode
   };
 
   const handleOnboardingCancel = () => {
-    onShutdown().then(() => exit());
+    onShutdown()
+      .then(() => exit())
+      .catch((err) => {
+        process.stderr.write(
+          `Warning: Error during shutdown: ${err instanceof Error ? err.message : String(err)}\n`
+        );
+        exit();
+      });
   };
 
   // -- Keyboard handling --
@@ -270,7 +288,14 @@ export function App({ tunnelService, zones, defaultZone, onShutdown, initialMode
         dispatch({ type: 'SET_MODE', mode: state.tunnels.size > 0 ? 'dashboard' : 'empty' });
       } else {
         // Default YES
-        onShutdown().then(() => exit());
+        onShutdown()
+          .then(() => exit())
+          .catch((err) => {
+            process.stderr.write(
+              `Warning: Error during shutdown: ${err instanceof Error ? err.message : String(err)}\n`
+            );
+            exit();
+          });
       }
       return;
     }
@@ -397,11 +422,11 @@ export function App({ tunnelService, zones, defaultZone, onShutdown, initialMode
       return;
     }
 
-    // o: open in browser
+    // o: open in browser (async to avoid blocking TUI)
     if (input === 'o' && selectedRuntime?.publicUrl) {
       try {
         const cmd = platform() === 'darwin' ? 'open' : 'xdg-open';
-        execFileSync(cmd, [selectedRuntime.publicUrl], { stdio: 'ignore' });
+        spawnChild(cmd, [selectedRuntime.publicUrl], { stdio: 'ignore', detached: true }).unref();
       } catch {}
       return;
     }

@@ -47,7 +47,7 @@ function makeRuntime(name: string, config: TunnelConfig): TunnelRuntime {
     publicUrl: `https://${config.subdomain}.${config.zone}`,
     connectorToken: null,
     metricsPort: null,
-    uptime: 0,
+    connectedAt: 0,
     lastError: null,
     connections: [],
   };
@@ -250,56 +250,7 @@ export class TunnelService extends EventEmitter {
         runtime.pid = proc.pid;
       }
 
-      // Listen for process exit
-      proc.child.once('exit', (code) => {
-        this.processes.delete(name);
-        removePid(name);
-        runtime.pid = null;
-        if (runtime.state !== 'stopped') {
-          this.setState(name, runtime, code === 0 ? 'disconnected' : 'error');
-          if (code !== 0) {
-            runtime.lastError = `cloudflared exited with code ${code}`;
-          }
-        }
-      });
-
-      // Parse stderr for metrics port, connection state, and log events
-      proc.onStderr((line) => {
-        // Detect metrics server address
-        const addr = extractMetricsAddr(line);
-        if (addr) {
-          const port = parseInt(addr.split(':')[1], 10);
-          if (!isNaN(port)) runtime.metricsPort = port;
-        }
-
-        // Parse structured log line
-        const parsed = parseLogLine(line);
-        if (parsed) {
-          const reg = extractRegistration(line);
-          const event: ConnectionEvent = {
-            timestamp: parsed.timestamp,
-            level: parsed.level,
-            message: parsed.message,
-            ...(reg && {
-              connIndex: reg.connIndex,
-              connectionId: reg.connectionId,
-              location: reg.location,
-              edgeIp: reg.edgeIp,
-              protocol: reg.protocol,
-            }),
-          };
-          runtime.connections = runtime.connections.length >= MAX_EVENTS
-            ? [...runtime.connections.slice(-MAX_EVENTS + 1), event]
-            : [...runtime.connections, event];
-          this.emit('stateChange', { name, state: runtime.state, tunnel: runtime });
-
-          // Detect successful connection
-          if (reg) {
-            this.setState(name, runtime, 'connected');
-            runtime.uptime = Date.now();
-          }
-        }
-      });
+      this.wireProcess(name, proc, runtime);
 
       // Update persisted state
       this.persistTunnelState(name, 'running');
@@ -327,7 +278,7 @@ export class TunnelService extends EventEmitter {
     removePid(name);
     runtime.pid = null;
     runtime.metricsPort = null;
-    runtime.uptime = 0;
+    runtime.connectedAt = 0;
     this.setState(name, runtime, 'stopped');
     this.persistTunnelState(name, 'stopped');
   }
@@ -368,53 +319,7 @@ export class TunnelService extends EventEmitter {
     runtime.pid = proc.pid ?? null;
     this.processes.set(name, proc);
 
-    // Wire up process exit
-    proc.child.once('exit', (code) => {
-      this.processes.delete(name);
-      removePid(name);
-      runtime.pid = null;
-      if (runtime.state !== 'stopped') {
-        this.setState(name, runtime, code === 0 ? 'disconnected' : 'error');
-        if (code !== 0) {
-          runtime.lastError = `cloudflared exited with code ${code}`;
-        }
-      }
-    });
-
-    // Wire up stderr log parsing
-    proc.onStderr((line) => {
-      const addr = extractMetricsAddr(line);
-      if (addr) {
-        const port = parseInt(addr.split(':')[1], 10);
-        if (!isNaN(port)) runtime.metricsPort = port;
-      }
-
-      const parsed = parseLogLine(line);
-      if (parsed) {
-        const reg = extractRegistration(line);
-        const event: ConnectionEvent = {
-          timestamp: parsed.timestamp,
-          level: parsed.level,
-          message: parsed.message,
-          ...(reg && {
-            connIndex: reg.connIndex,
-            connectionId: reg.connectionId,
-            location: reg.location,
-            edgeIp: reg.edgeIp,
-            protocol: reg.protocol,
-          }),
-        };
-        runtime.connections = runtime.connections.length >= MAX_EVENTS
-          ? [...runtime.connections.slice(-MAX_EVENTS + 1), event]
-          : [...runtime.connections, event];
-        this.emit('stateChange', { name, state: runtime.state, tunnel: runtime });
-
-        if (reg) {
-          this.setState(name, runtime, 'connected');
-          runtime.uptime = Date.now();
-        }
-      }
-    });
+    this.wireProcess(name, proc, runtime);
 
     this.setState(name, runtime, 'connecting');
   }
@@ -460,6 +365,57 @@ export class TunnelService extends EventEmitter {
   }
 
   // -- Private helpers --
+
+  private wireProcess(name: string, proc: CloudflaredProcess, runtime: TunnelRuntime): void {
+    // Exit handler
+    proc.child.once('exit', (code) => {
+      this.processes.delete(name);
+      removePid(name);
+      runtime.pid = null;
+      if (runtime.state !== 'stopped') {
+        this.setState(name, runtime, code === 0 ? 'disconnected' : 'error');
+        if (code !== 0) {
+          runtime.lastError = `cloudflared exited with code ${code}`;
+        }
+      }
+    });
+
+    // Stderr parser for metrics port, connection state, and log events
+    proc.onStderr((line) => {
+      const addr = extractMetricsAddr(line);
+      if (addr) {
+        const port = parseInt(addr.split(':')[1], 10);
+        if (!isNaN(port)) runtime.metricsPort = port;
+      }
+
+      const parsed = parseLogLine(line);
+      if (parsed) {
+        const reg = extractRegistration(line);
+        const event: ConnectionEvent = {
+          timestamp: parsed.timestamp,
+          level: parsed.level,
+          message: parsed.message,
+          ...(reg && {
+            connIndex: reg.connIndex,
+            connectionId: reg.connectionId,
+            location: reg.location,
+            edgeIp: reg.edgeIp,
+            protocol: reg.protocol,
+          }),
+        };
+        runtime.connections.push(event);
+        if (runtime.connections.length > MAX_EVENTS) {
+          runtime.connections.shift();
+        }
+        this.emit('stateChange', { name, state: runtime.state, tunnel: runtime });
+
+        if (reg) {
+          this.setState(name, runtime, 'connected');
+          runtime.connectedAt = Date.now();
+        }
+      }
+    });
+  }
 
   private setState(name: string, runtime: TunnelRuntime, state: TunnelState): void {
     runtime.state = state;

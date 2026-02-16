@@ -1,9 +1,11 @@
 import React from 'react';
 import { Box, Text } from 'ink';
-import type { TunnelRuntime, TunnelState, TunnelMetrics } from '../types.js';
+import type { TunnelRuntime, TunnelMetrics } from '../types.js';
 import { TabBar } from './TabBar.js';
 import { LogView } from './LogView.js';
 import { Metrics } from './Metrics.js';
+import { getStateIndicator } from './state-display.js';
+import { color } from './use-color.js';
 
 export interface MainPanelProps {
   tunnel: TunnelRuntime | null;
@@ -23,7 +25,7 @@ export function MainPanel({ tunnel, focused, activeTab, logFilter, logPaused, on
         flexDirection="column"
         flexGrow={1}
         borderStyle="single"
-        borderColor={focused ? 'cyan' : 'gray'}
+        borderColor={color(focused ? 'cyan' : 'gray')}
         justifyContent="center"
         alignItems="center"
       >
@@ -37,7 +39,7 @@ export function MainPanel({ tunnel, focused, activeTab, logFilter, logPaused, on
       flexDirection="column"
       flexGrow={1}
       borderStyle="single"
-      borderColor={focused ? 'cyan' : 'gray'}
+      borderColor={color(focused ? 'cyan' : 'gray')}
     >
       <TabBar activeTab={activeTab} />
 
@@ -49,8 +51,8 @@ export function MainPanel({ tunnel, focused, activeTab, logFilter, logPaused, on
           </Text>
           <Text> </Text>
           <Text>
-            Status: {stateIndicator(tunnel.state)}
-            {'    '}Uptime: {formatUptime(tunnel.uptime)}
+            Status: {getStateIndicator(tunnel.state)}
+            {'    '}Uptime: {formatUptime(tunnel.connectedAt)}
           </Text>
           <Text>Local:  http://localhost:{tunnel.config.port}</Text>
           {tunnel.publicUrl && (
@@ -60,7 +62,7 @@ export function MainPanel({ tunnel, focused, activeTab, logFilter, logPaused, on
             <Text dimColor>ID:     {tunnel.tunnelId}</Text>
           )}
           {tunnel.lastError && (
-            <Text color="red">Error:  {tunnel.lastError}</Text>
+            <Text color={color('red')}>Error:  {tunnel.lastError}</Text>
           )}
         </Box>
       )}
@@ -87,19 +89,6 @@ export function MainPanel({ tunnel, focused, activeTab, logFilter, logPaused, on
   );
 }
 
-function stateIndicator(s: TunnelState): string {
-  switch (s) {
-    case 'connected': return '\u25CF UP';
-    case 'disconnected': return '\u25CB DOWN';
-    case 'connecting': return '\u25CC CONNECTING';
-    case 'creating': return '\u25CC CREATING';
-    case 'restarting': return '\u25CC RESTARTING';
-    case 'port_down': return '\u26A0 PORT DOWN';
-    case 'error': return '\u2717 ERROR';
-    case 'stopped': return '- STOPPED';
-    default: return '? UNKNOWN';
-  }
-}
 
 function formatUptime(startTimestamp: number): string {
   if (startTimestamp <= 0) return '00:00:00';

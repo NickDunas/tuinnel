@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Box, Text } from 'ink';
 import type { ConnectionEvent } from '../types.js';
+import { color } from './use-color.js';
 
 export interface LogViewProps {
   events: ConnectionEvent[];
@@ -13,12 +14,11 @@ export interface LogViewProps {
 const MAX_VISIBLE = 15;
 
 function levelColor(level: ConnectionEvent['level']): string | undefined {
-  if (process.env['NO_COLOR']) return undefined;
   switch (level) {
-    case 'INF': return 'green';
-    case 'WRN': return 'yellow';
+    case 'INF': return color('green');
+    case 'WRN': return color('yellow');
     case 'ERR':
-    case 'FTL': return 'red';
+    case 'FTL': return color('red');
     default: return undefined;
   }
 }
@@ -89,7 +89,7 @@ export function LogView({ events, filter, paused, publicUrl }: LogViewProps) {
         </Text>
       ))}
       {paused && (
-        <Text color="yellow">{'  '}PAUSED -- press End to resume</Text>
+        <Text color={color('yellow')}>{'  '}PAUSED -- press End to resume</Text>
       )}
       {filter !== null && filtered.length === 0 && events.length > 0 && (
         <Text dimColor>{'  '}No events matching "{filter}"</Text>

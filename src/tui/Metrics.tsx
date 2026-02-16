@@ -1,6 +1,7 @@
 import React from 'react';
 import { Box, Text } from 'ink';
 import type { TunnelMetrics } from '../types.js';
+import { color } from './use-color.js';
 
 interface MetricsProps {
   metrics: TunnelMetrics | null;
@@ -42,19 +43,19 @@ function Row({ label, children, dim }: { label: string; children: React.ReactNod
 function SectionHeader({ title, dim }: { title: string; dim?: boolean }) {
   return (
     <Box marginTop={1}>
-      <Text bold color={dim ? undefined : 'cyan'} dimColor={dim}>{title}</Text>
+      <Text bold color={dim ? undefined : color('cyan')} dimColor={dim}>{title}</Text>
     </Box>
   );
 }
 
 function ResponseCodeBadge({ group, count, dim }: { group: string; count: number; dim?: boolean }) {
-  const color = dim ? undefined
-    : group.startsWith('2') ? 'green'
-    : group.startsWith('3') ? 'yellow'
-    : group.startsWith('4') ? 'yellow'
-    : group.startsWith('5') ? 'red'
+  const badgeColor = dim ? undefined
+    : group.startsWith('2') ? color('green')
+    : group.startsWith('3') ? color('yellow')
+    : group.startsWith('4') ? color('yellow')
+    : group.startsWith('5') ? color('red')
     : undefined;
-  return <Text color={color} dimColor={dim}>{group}: {count}</Text>;
+  return <Text color={badgeColor} dimColor={dim}>{group}: {count}</Text>;
 }
 
 export function Metrics({ metrics, metricsAddr }: MetricsProps) {
@@ -88,10 +89,10 @@ export function Metrics({ metrics, metricsAddr }: MetricsProps) {
         <Text>{metrics.totalRequests}</Text>
       </Row>
       <Row label="Errors" dim={isStale}>
-        <Text color={hasErrors && !isStale ? 'red' : isStale ? undefined : 'green'}>
+        <Text color={color(hasErrors && !isStale ? 'red' : isStale ? undefined : 'green')}>
           {metrics.requestErrors}
         </Text>
-        {hasErrors && !isStale && <Text color="red"> !</Text>}
+        {hasErrors && !isStale && <Text color={color('red')}> !</Text>}
       </Row>
       <Row label="Active Now" dim={isStale}>
         <Text>{metrics.concurrentRequests}</Text>
@@ -132,7 +133,7 @@ export function Metrics({ metrics, metricsAddr }: MetricsProps) {
       )}
 
       <Box marginTop={1}>
-        <Text dimColor={!isStale} color={isStale ? 'yellow' : undefined}>
+        <Text dimColor={!isStale} color={isStale ? color('yellow') : undefined}>
           {isStale ? '! ' : ''}Updated {age}
         </Text>
       </Box>

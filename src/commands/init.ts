@@ -1,4 +1,3 @@
-import { createInterface } from 'readline';
 import { existsSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
@@ -6,6 +5,7 @@ import { configExists, readConfig, writeConfig, getDefaultConfig } from '../conf
 import { validateToken } from '../cloudflare/api.js';
 import type { Zone } from '../cloudflare/types.js';
 import { logger } from '../utils/logger.js';
+import { prompt } from '../utils/prompt.js';
 
 function isGlobalApiKey(token: string): boolean {
   // Global API keys are 37 chars hex, API tokens are longer with mixed chars
@@ -17,35 +17,21 @@ function maskToken(token: string): string {
   return '*'.repeat(token.length - 4) + token.slice(-4);
 }
 
-async function prompt(rl: ReturnType<typeof createInterface>, question: string): Promise<string> {
-  return new Promise(resolve => {
-    rl.question(question, (answer) => {
-      resolve(answer.trim());
-    });
-  });
-}
-
 export async function initCommand(): Promise<void> {
-  const rl = createInterface({
-    input: process.stdin,
-    output: process.stderr,
-  });
-
-  try {
-    // Check for existing config
-    if (configExists()) {
-      const existing = readConfig();
-      if (existing?.apiToken) {
-        const answer = await prompt(rl, `\nExisting config found with token ending ...${existing.apiToken.slice(-4)}. Reconfigure? (y/N) `);
-        if (answer.toLowerCase() !== 'y') {
-          logger.info('Keeping existing configuration.');
-          return;
-        }
+  // Check for existing config
+  if (configExists()) {
+    const existing = readConfig();
+    if (existing?.apiToken) {
+      const answer = await prompt(`\nExisting config found with token ending ...${existing.apiToken.slice(-4)}. Reconfigure? (y/N) `);
+      if (answer.toLowerCase() !== 'y') {
+        logger.info('Keeping existing configuration.');
+        return;
       }
     }
+  }
 
-    // Print required permissions
-    console.error(`
+  // Print required permissions
+  console.error(`
 Required API Token Permissions:
   - Zone:Read              (list your domains)
   - DNS:Edit               (create/delete CNAME records)
@@ -54,95 +40,95 @@ Required API Token Permissions:
 Create a token at: https://dash.cloudflare.com/profile/api-tokens
 `);
 
-    let token: string | null = null;
+  let token: string | null = null;
 
-    // Check for env var
-    const envToken = process.env.CLOUDFLARE_API_TOKEN || process.env.TUINNEL_API_TOKEN;
-    if (envToken) {
-      const answer = await prompt(rl, `Found CLOUDFLARE_API_TOKEN env var (${maskToken(envToken)}). Use it? (Y/n) `);
-      if (answer.toLowerCase() !== 'n') {
-        token = envToken;
-      }
+  // Check for env var
+  const envToken = process.env.CLOUDFLARE_API_TOKEN || process.env.TUINNEL_API_TOKEN;
+  if (envToken) {
+    const answer = await prompt(`Found CLOUDFLARE_API_TOKEN env var (${maskToken(envToken)}). Use it? (Y/n) `);
+    if (answer.toLowerCase() !== 'n') {
+      token = envToken;
     }
-
-    // Check for existing cloudflared credentials
-    if (!token) {
-      const cloudflaredDir = join(homedir(), '.cloudflared');
-      if (existsSync(cloudflaredDir)) {
-        logger.info(`Found existing ~/.cloudflared/ directory.`);
-        // Check for cert.pem which might have credentials
-        const certPath = join(cloudflaredDir, 'cert.pem');
-        if (existsSync(certPath)) {
-          logger.info('Found cloudflared certificate. Note: tuinnel uses API tokens, not cloudflared certificates.');
-        }
-      }
-    }
-
-    // Prompt for token if not provided
-    if (!token) {
-      token = await prompt(rl, 'Paste your API token: ');
-    }
-
-    if (!token) {
-      logger.error('No token provided.');
-      process.exit(1);
-    }
-
-    // Detect Global API Key format
-    if (isGlobalApiKey(token)) {
-      logger.error('This looks like a Global API Key, not an API Token.');
-      console.error('\ntuinnel requires a scoped API Token, not a Global API Key.');
-      console.error('Create an API Token at: https://dash.cloudflare.com/profile/api-tokens');
-      process.exit(1);
-    }
-
-    console.error(`\nToken: ${maskToken(token)}`);
-
-    // Validate token
-    logger.info('Validating token...');
-    const result = await validateToken(token);
-
-    if (!result.valid) {
-      logger.error('Token validation failed.');
-      if (result.error) {
-        console.error(result.error);
-      }
-      process.exit(1);
-    }
-
-    logger.success(`Token valid. Found ${result.zones.length} zone${result.zones.length !== 1 ? 's' : ''}.`);
-
-    // Zone selection
-    let defaultZone: string | undefined;
-
-    if (result.zones.length === 1) {
-      defaultZone = result.zones[0].name;
-      logger.info(`Using zone: ${defaultZone}`);
-    } else if (result.zones.length > 1) {
-      console.error('\nAvailable zones:');
-      result.zones.forEach((zone: Zone, i: number) => {
-        console.error(`  ${i + 1}. ${zone.name} (${zone.status})`);
-      });
-      const answer = await prompt(rl, `\nSelect default zone (1-${result.zones.length}): `);
-      const idx = parseInt(answer, 10) - 1;
-      if (idx >= 0 && idx < result.zones.length) {
-        defaultZone = result.zones[idx].name;
-      } else {
-        logger.warn('Invalid selection. No default zone set (you can specify per tunnel).');
-      }
-    }
-
-    // Save config
-    const config = configExists() ? readConfig() ?? getDefaultConfig() : getDefaultConfig();
-    config.apiToken = token;
-    if (defaultZone) {
-      config.defaultZone = defaultZone;
-    }
-    writeConfig(config);
-
-    logger.success('Configuration saved.');
-    console.error(`\nTry: tuinnel up 3000`);
-  } finally {
-    rl.close();
   }
+
+  // Check for existing cloudflared credentials
+  if (!token) {
+    const cloudflaredDir = join(homedir(), '.cloudflared');
+    if (existsSync(cloudflaredDir)) {
+      logger.info(`Found existing ~/.cloudflared/ directory.`);
+      // Check for cert.pem which might have credentials
+      const certPath = join(cloudflaredDir, 'cert.pem');
+      if (existsSync(certPath)) {
+        logger.info('Found cloudflared certificate. Note: tuinnel uses API tokens, not cloudflared certificates.');
+      }
+    }
+  }
+
+  // Prompt for token if not provided
+  if (!token) {
+    token = await prompt('Paste your API token: ');
+  }
+
+  if (!token) {
+    logger.error('No token provided.');
+    process.exitCode = 1;
+    return;
+  }
+
+  // Detect Global API Key format
+  if (isGlobalApiKey(token)) {
+    logger.error('This looks like a Global API Key, not an API Token.');
+    console.error('\ntuinnel requires a scoped API Token, not a Global API Key.');
+    console.error('Create an API Token at: https://dash.cloudflare.com/profile/api-tokens');
+    process.exitCode = 1;
+    return;
+  }
+
+  console.error(`\nToken: ${maskToken(token)}`);
+
+  // Validate token
+  logger.info('Validating token...');
+  const result = await validateToken(token);
+
+  if (!result.valid) {
+    logger.error('Token validation failed.');
+    if (result.error) {
+      console.error(result.error);
+    }
+    process.exitCode = 1;
+    return;
+  }
+
+  logger.success(`Token valid. Found ${result.zones.length} zone${result.zones.length !== 1 ? 's' : ''}.`);
+
+  // Zone selection
+  let defaultZone: string | undefined;
+
+  if (result.zones.length === 1) {
+    defaultZone = result.zones[0].name;
+    logger.info(`Using zone: ${defaultZone}`);
+  } else if (result.zones.length > 1) {
+    console.error('\nAvailable zones:');
+    result.zones.forEach((zone: Zone, i: number) => {
+      console.error(`  ${i + 1}. ${zone.name} (${zone.status})`);
+    });
+    const answer = await prompt(`\nSelect default zone (1-${result.zones.length}): `);
+    const idx = parseInt(answer, 10) - 1;
+    if (idx >= 0 && idx < result.zones.length) {
+      defaultZone = result.zones[idx].name;
+    } else {
+      logger.warn('Invalid selection. No default zone set (you can specify per tunnel).');
+    }
+  }
+
+  // Save config
+  const config = configExists() ? readConfig() ?? getDefaultConfig() : getDefaultConfig();
+  config.apiToken = token;
+  if (defaultZone) {
+    config.defaultZone = defaultZone;
+  }
+  writeConfig(config);
+
+  logger.success('Configuration saved.');
+  console.error(`\nTry: tuinnel up 3000`);
 }

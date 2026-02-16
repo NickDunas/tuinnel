@@ -66,6 +66,7 @@ function getHistogramPercentiles(raw: RawMetrics, name: string): { p50: number; 
         count: e.value,
       };
     })
+    .filter(b => isFinite(b.le))
     .sort((a, b) => a.le - b.le);
 
   const p50Target = totalCount * 0.5;
@@ -123,6 +124,10 @@ export function useMetrics(
 
   useEffect(() => {
     mountedRef.current = true;
+    // Reset on addr change to avoid showing stale data
+    setMetrics(null);
+    setError(null);
+    setLastScraped(null);
 
     if (!addr) return;
 

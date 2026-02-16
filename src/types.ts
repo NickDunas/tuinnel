@@ -21,7 +21,7 @@ export interface TunnelRuntime {
   publicUrl: string | null;    // https://subdomain.zone.com
   connectorToken: string | null;
   metricsPort: number | null;  // Discovered from stderr
-  uptime: number;              // ms since connected
+  connectedAt: number;         // timestamp when connected (Date.now())
   lastError: string | null;
   connections: ConnectionEvent[];
 }

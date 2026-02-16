@@ -18,6 +18,8 @@ const TIMEOUT_MS = 30_000;
 const MAX_429_RETRIES = 3;
 const MAX_5XX_RETRIES = 1;
 const MAX_NETWORK_RETRIES = 1;
+const MIN_RETRY_DELAY_MS = 1000;   // Never retry faster than 1 second
+const MAX_RETRY_DELAY_MS = 60_000; // Never wait longer than 1 minute
 
 // -- Cached account ID --
 
@@ -48,8 +50,10 @@ export async function cfFetch<T extends z.ZodType>(
   const url = buildUrl(endpoint, opts.params);
   const headers: Record<string, string> = {
     'Authorization': `Bearer ${token}`,
-    'Content-Type': 'application/json',
   };
+  if (opts.body !== undefined) {
+    headers['Content-Type'] = 'application/json';
+  }
 
   const requestInit: RequestInit = {
     method: opts.method ?? 'GET',
@@ -153,13 +157,21 @@ async function fetchWithRetry<T extends z.ZodType>(
 }
 
 function parseRetryAfter(header: string | null): number {
-  if (!header) return 1000;
+  if (!header) return MIN_RETRY_DELAY_MS;
+
   const seconds = parseInt(header, 10);
-  if (!isNaN(seconds)) return seconds * 1000;
-  // Retry-After can also be a date
+  if (!isNaN(seconds)) {
+    const ms = seconds * 1000;
+    return Math.max(MIN_RETRY_DELAY_MS, Math.min(ms, MAX_RETRY_DELAY_MS));
+  }
+
   const date = Date.parse(header);
-  if (!isNaN(date)) return Math.max(0, date - Date.now());
-  return 1000;
+  if (!isNaN(date)) {
+    const ms = Math.max(0, date - Date.now());
+    return Math.max(MIN_RETRY_DELAY_MS, Math.min(ms, MAX_RETRY_DELAY_MS));
+  }
+
+  return MIN_RETRY_DELAY_MS;
 }
 
 function sleep(ms: number): Promise<void> {
@@ -219,6 +231,12 @@ export async function getAllZones(token: string): Promise<Zone[]> {
 
 // -- Account ID discovery --
 
+/**
+ * Discovers the account ID by fetching the first zone.
+ * NOTE: Assumes all zones belong to the same account.
+ * If the API token spans multiple accounts, the account from the
+ * first zone returned by the API will be used.
+ */
 export async function discoverAccountId(token: string): Promise<string> {
   if (cachedAccountId) return cachedAccountId;
 
@@ -272,7 +290,7 @@ export async function createTunnel(
   accountId: string,
   name: string,
   token: string,
-): Promise<Tunnel> {
+): Promise<Tunnel | { conflict: true; error: string }> {
   const response = await cfFetch(
     `/accounts/${accountId}/cfd_tunnel`,
     TunnelSchema,
@@ -282,6 +300,10 @@ export async function createTunnel(
       body: { name, config_src: 'cloudflare' },
     },
   );
+  if (!response.success) {
+    const errorMsg = response.errors.map(e => e.message).join('; ') || 'Unknown error';
+    return { conflict: true, error: errorMsg };
+  }
   return response.result;
 }
 
@@ -309,6 +331,9 @@ export async function getTunnelToken(
     z.string(),
     token,
   );
+  if (!response.success) {
+    throw new Error(`Failed to get tunnel token: ${response.errors.map(e => e.message).join('; ')}`);
+  }
   return response.result;
 }
 
@@ -335,7 +360,7 @@ export async function updateTunnelConfig(
 ): Promise<void> {
   await cfFetch(
     `/accounts/${accountId}/cfd_tunnel/${tunnelId}/configurations`,
-    z.unknown(),
+    z.object({}).passthrough(),
     token,
     {
       method: 'PUT',
@@ -358,7 +383,7 @@ export async function createDnsRecord(
   zoneId: string,
   record: { type: string; name: string; content: string; proxied: boolean; ttl: number },
   token: string,
-): Promise<DNSRecord> {
+): Promise<DNSRecord | { conflict: true; error: string }> {
   const response = await cfFetch(
     `/zones/${zoneId}/dns_records`,
     DNSRecordSchema,
@@ -368,6 +393,10 @@ export async function createDnsRecord(
       body: record,
     },
   );
+  if (!response.success) {
+    const errorMsg = response.errors.map(e => e.message).join('; ') || 'Unknown error';
+    return { conflict: true, error: errorMsg };
+  }
   return response.result;
 }
 
@@ -386,6 +415,9 @@ export async function updateDnsRecord(
       body: record,
     },
   );
+  if (!response.success) {
+    throw new Error(`Failed to update DNS record: ${response.errors.map(e => e.message).join('; ')}`);
+  }
   return response.result;
 }
 

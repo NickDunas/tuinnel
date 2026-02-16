@@ -4,12 +4,28 @@ import { homedir } from 'os';
 
 const PIDS_FILE = join(homedir(), '.tuinnel', '.pids.json');
 
-export function readPids(): Record<string, number> {
+interface PidEntry {
+  pid: number;
+  startedAt: number;
+}
+
+type PidStore = Record<string, PidEntry>;
+
+export function readPids(): PidStore {
   try {
     const raw = readFileSync(PIDS_FILE, 'utf-8');
     const parsed = JSON.parse(raw);
     if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
-      return parsed as Record<string, number>;
+      // Migrate old format: number values -> { pid, startedAt }
+      const result: PidStore = {};
+      for (const [name, value] of Object.entries(parsed)) {
+        if (typeof value === 'number') {
+          result[name] = { pid: value, startedAt: 0 };
+        } else if (typeof value === 'object' && value !== null && 'pid' in value) {
+          result[name] = value as PidEntry;
+        }
+      }
+      return result;
     }
     return {};
   } catch {
@@ -17,7 +33,7 @@ export function readPids(): Record<string, number> {
   }
 }
 
-export function writePids(pids: Record<string, number>): void {
+export function writePids(pids: PidStore): void {
   const dir = dirname(PIDS_FILE);
   mkdirSync(dir, { recursive: true });
   const tmp = PIDS_FILE + '.tmp';
@@ -27,7 +43,7 @@ export function writePids(pids: Record<string, number>): void {
 
 export function writePid(name: string, pid: number): void {
   const pids = readPids();
-  pids[name] = pid;
+  pids[name] = { pid, startedAt: Date.now() };
   writePids(pids);
 }
 
@@ -39,13 +55,13 @@ export function removePid(name: string): void {
 
 export function isRunning(name: string): { running: boolean; pid?: number } {
   const pids = readPids();
-  const pid = pids[name];
-  if (pid === undefined) {
+  const entry = pids[name];
+  if (!entry) {
     return { running: false };
   }
 
-  if (isProcessAlive(pid)) {
-    return { running: true, pid };
+  if (isProcessAlive(entry.pid)) {
+    return { running: true, pid: entry.pid };
   }
 
   // Stale entry — process is dead, clean up
@@ -58,9 +74,9 @@ export function getRunningTunnels(): Array<{ name: string; pid: number }> {
   const running: Array<{ name: string; pid: number }> = [];
   const stale: string[] = [];
 
-  for (const [name, pid] of Object.entries(pids)) {
-    if (isProcessAlive(pid)) {
-      running.push({ name, pid });
+  for (const [name, entry] of Object.entries(pids)) {
+    if (isProcessAlive(entry.pid)) {
+      running.push({ name, pid: entry.pid });
     } else {
       stale.push(name);
     }

@@ -2,12 +2,30 @@
   "name": "tuinnel",
   "version": "0.1.0",
   "description": "Cloudflare Tunnel manager with TUI dashboard",
+  "license": "MIT",
+  "author": "Nick Dunas",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/NickDunas/tuinnel.git"
+  },
+  "homepage": "https://github.com/NickDunas/tuinnel#readme",
+  "bugs": {
+    "url": "https://github.com/NickDunas/tuinnel/issues"
+  },
+  "keywords": [
+    "cloudflare",
+    "tunnel",
+    "cloudflared",
+    "cli",
+    "tui"
+  ],
   "type": "module",
   "bin": {
     "tuinnel": "dist/index.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "LICENSE"
   ],
   "engines": {
     "node": ">=20"

@@ -14,7 +14,7 @@ function makeTunnel(overrides: Partial<TunnelRuntime> = {}): TunnelRuntime {
     publicUrl: 'https://angular.mysite.com',
     connectorToken: null,
     metricsPort: null,
-    uptime: Date.now() - 754000, // ~12min 34sec ago
+    connectedAt: Date.now() - 754000, // ~12min 34sec ago
     lastError: null,
     connections: [],
     ...overrides,
@@ -60,7 +60,7 @@ describe('MainPanel', () => {
   });
 
   test('shows status and uptime', () => {
-    const tunnel = makeTunnel({ uptime: Date.now() - 754000 }); // 12 min 34 sec ago
+    const tunnel = makeTunnel({ connectedAt: Date.now() - 754000 }); // 12 min 34 sec ago
     const { lastFrame } = render(
       <MainPanel tunnel={tunnel} focused={false} activeTab="details" logFilter={null} logPaused={false} />
     );

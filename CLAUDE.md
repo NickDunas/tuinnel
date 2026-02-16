@@ -48,7 +48,7 @@ src/index.ts              Commander.js CLI entry — dynamic imports per command
 ### Key patterns
 
 - **CLI entry** (`src/index.ts`): Commander.js with `parseAsync()`. Each command uses a dynamic `import()` so only the relevant module loads. Global `--verbose` flag wired via `preAction` hook.
-- **CF API** (`src/cloudflare/api.ts`): Single `cfFetch()` function wraps all API calls with 30s timeout, Zod schema validation of response envelopes, and automatic retry (429 rate-limit with Retry-After, 5xx with backoff, network errors). Page-based pagination via `paginate()` async generator (per_page=50).
+- **CF API** (`src/cloudflare/api.ts`): Single `cfFetch()` function wraps all API calls with 30s timeout, Zod schema validation of response envelopes, and automatic retry (429 rate-limit with Retry-After, 5xx with backoff, network errors). Page-based pagination via `paginate()` async generator (per_page=50). The `cfResponseSchema` makes `result` nullable so error responses (e.g. 409 with `result: null`) parse successfully and reach the `classifyError` recoverable-error path.
 - **Error classification** (`src/cloudflare/errors.ts`): Errors are categorized as fatal/recoverable/transient. Recoverable (409 conflict) is returned to caller; fatal throws with user-facing message including remediation URLs.
 - **Tunnel lifecycle** (`src/cloudflare/tunnel-manager.ts`): 4-step startup (create/get tunnel → update ingress → create/verify DNS CNAME → spawn cloudflared). Fail-fast with rollback on error via `cleanupOnFailure()`. Tunnel names are prefixed with `tuinnel-`.
 - **cloudflared process** (`src/cloudflared/process.ts`): Spawns cloudflared with `--no-autoupdate --metrics 127.0.0.1:0 --protocol quic`. Flags go BEFORE `run`, `--token` goes AFTER `run`. Graceful SIGTERM with 5s timeout then SIGKILL.
@@ -73,5 +73,6 @@ Tests use `bun:test` (Bun's built-in test runner). API tests mock `globalThis.fe
 - CF API endpoints use `/accounts/{account_id}/cfd_tunnel` (not `/tunnels`)
 - CF API uses page-based pagination (not cursor-based), max 50 per page
 - Zod schemas validate both config files and API responses
+- `cfFetch` result schemas must match what CF returns in `result`, not the envelope — for void-returning calls use `z.object({}).passthrough()`
 - JSX uses `react-jsx` transform (no React import needed in .tsx files)
 - macOS cloudflared downloads are `.tgz` archives; Linux are bare binaries

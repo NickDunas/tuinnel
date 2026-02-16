@@ -24,7 +24,7 @@ export function cfResponseSchema<T extends z.ZodType>(resultSchema: T) {
     success: z.boolean(),
     errors: z.array(CFErrorSchema),
     messages: z.array(CFErrorSchema),
-    result: resultSchema,
+    result: resultSchema.nullable(),
     result_info: CFResultInfoSchema.optional(),
   });
 }
@@ -34,7 +34,7 @@ export function cfResponseSchema<T extends z.ZodType>(resultSchema: T) {
 export const ZoneSchema = z.object({
   id: z.string(),
   name: z.string(),
-  status: z.enum(['active', 'pending', 'initializing', 'moved']),
+  status: z.string(),
   account: z.object({
     id: z.string(),
     name: z.string(),

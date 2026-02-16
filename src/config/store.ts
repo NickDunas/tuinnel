@@ -47,9 +47,10 @@ export function writeConfig(config: Config): void {
     );
   }
 
-  // Ensure config directory exists
+  // Ensure config directory exists with restricted permissions
   if (!existsSync(CONFIG_DIR)) {
     mkdirSync(CONFIG_DIR, { recursive: true });
+    chmodSync(CONFIG_DIR, 0o700);
   }
 
   const tmpPath = CONFIG_PATH + '.tmp';

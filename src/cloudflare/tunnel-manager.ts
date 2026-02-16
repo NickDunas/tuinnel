@@ -39,22 +39,18 @@ export async function createOrGetTunnel(
   token: string,
 ): Promise<TunnelInfo> {
   const cfName = cfTunnelName(name);
-  let tunnel: Tunnel;
+  const result = await createTunnel(accountId, cfName, token);
 
-  try {
-    tunnel = await createTunnel(accountId, cfName, token);
-  } catch (err: unknown) {
-    // 409 means tunnel already exists — fetch it by name
-    const message = err instanceof Error ? err.message : String(err);
-    if (message.includes('already') || message.includes('409')) {
-      const existing = await getTunnelByName(accountId, cfName, token);
-      if (!existing) {
-        throw new Error(`Tunnel "${cfName}" reported as existing but could not be found.`);
-      }
-      tunnel = existing;
-    } else {
-      throw err;
+  let tunnel: Tunnel;
+  if ('conflict' in result) {
+    // 409: tunnel already exists — fetch by name
+    const existing = await getTunnelByName(accountId, cfName, token);
+    if (!existing) {
+      throw new Error(`Tunnel "${cfName}" reported as existing but could not be found.`);
     }
+    tunnel = existing;
+  } else {
+    tunnel = result;
   }
 
   const connectorToken = await getTunnelToken(accountId, tunnel.id, token);
@@ -133,6 +129,34 @@ export async function createOrVerifyDns(
     },
     token,
   );
+
+  if ('conflict' in record) {
+    // DNS record already exists — re-query to find the existing record
+    const retryRecords: DNSRecord[] = [];
+    for await (const r of listDnsRecords(zoneId, token, {
+      type: 'CNAME',
+      name: hostname,
+    })) {
+      retryRecords.push(r);
+    }
+    const existingRecord = retryRecords.find(
+      (r) => r.type === 'CNAME' && r.name === hostname,
+    );
+    if (!existingRecord) {
+      throw new Error(`DNS record for "${hostname}" reported as existing but could not be found.`);
+    }
+    if (existingRecord.content === tunnelCname) {
+      return { recordId: existingRecord.id, created: false };
+    }
+    // Points to a different tunnel — update to current tunnel
+    const updated = await updateDnsRecord(
+      zoneId,
+      existingRecord.id,
+      { type: 'CNAME', name: hostname, content: tunnelCname, proxied: true, ttl: 1 },
+      token,
+    );
+    return { recordId: updated.id, created: false, conflict: existingRecord.content };
+  }
 
   return { recordId: record.id, created: true };
 }

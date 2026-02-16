@@ -1,19 +1,17 @@
-import React from 'react';
 import { spawn } from 'child_process';
 import { createInterface } from 'readline';
-import { readConfig, writeConfig, configExists, getDefaultConfig, getToken as getTokenOrThrow } from '../config/store.js';
-import { suggestSubdomain } from '../config/port-map.js';
+import { readConfig, configExists, getToken as getTokenOrThrow } from '../config/store.js';
+import { addTunnelToConfig } from '../config/tunnel-config.js';
 import { ensureBinary } from '../cloudflared/binary.js';
 import { startTunnel, type StartedTunnel } from '../cloudflare/tunnel-manager.js';
-import { setupSignalHandlers, gracefulShutdown } from '../cloudflared/process.js';
+import { setupSignalHandlers } from '../cloudflared/process.js';
 import { extractQuickTunnelUrl } from '../cloudflared/log-parser.js';
 import { assertNotRunning, removePid } from '../cloudflared/pid.js';
 import { logger } from '../utils/logger.js';
 import { resolveLoopback } from '../utils/port-probe.js';
-import { TunnelService } from '../services/tunnel-service.js';
-import { getAllZones } from '../cloudflare/api.js';
+import { validatePort } from '../utils/validation.js';
+import { launchTui } from '../tui/launch.js';
 import type { TunnelConfig } from '../config/schema.js';
-import type { TunnelRuntime } from '../types.js';
 
 interface UpOptions {
   quick?: boolean;
@@ -21,15 +19,6 @@ interface UpOptions {
   verbose?: boolean;
   subdomain?: string;
   zone?: string;
-}
-
-function validatePort(portStr: string): number {
-  const port = parseInt(portStr, 10);
-  if (isNaN(port) || port < 1 || port > 65535) {
-    logger.error(`Invalid port: "${portStr}". Must be 1-65535.`);
-    process.exit(1);
-  }
-  return port;
 }
 
 /** Returns token or null (for quick-tunnel fallback) */
@@ -83,10 +72,7 @@ async function runQuickTunnels(ports: number[], binaryPath: string): Promise<voi
         if (url) {
           logger.success(`${url} <- :${port}`);
         }
-        // In verbose mode or --no-tui, stream all stderr
-        if (ports.length === 1) {
-          process.stderr.write(`[port:${port}] ${line}\n`);
-        }
+        process.stderr.write(`[port:${port}] ${line}\n`);
       });
       child.stderr.on('error', () => {});
     }
@@ -116,79 +102,6 @@ async function runQuickTunnels(ports: number[], binaryPath: string): Promise<voi
 
 // -- Named tunnel mode --
 
-async function promptSubdomain(port: number): Promise<string> {
-  const suggestion = suggestSubdomain(port, process.cwd());
-  const rl = createInterface({ input: process.stdin, output: process.stderr });
-  try {
-    const answer = await new Promise<string>((resolve) => {
-      rl.question(`Subdomain for port ${port}: ${suggestion} — accept? (Y/n) `, (a) => resolve(a.trim()));
-    });
-    if (answer.toLowerCase() === 'n') {
-      const custom = await new Promise<string>((resolve) => {
-        rl.question('Enter subdomain: ', (a) => resolve(a.trim()));
-      });
-      if (!custom) {
-        logger.error('No subdomain provided.');
-        process.exit(1);
-      }
-      return custom.toLowerCase();
-    }
-    return suggestion;
-  } finally {
-    rl.close();
-  }
-}
-
-async function inlineAddFlow(
-  port: number,
-  options: UpOptions,
-  config: ReturnType<typeof readConfig>,
-): Promise<{ name: string; tunnelConfig: TunnelConfig }> {
-  const isInteractive = process.stdin.isTTY ?? false;
-
-  let subdomain: string;
-  if (options.subdomain) {
-    subdomain = options.subdomain.toLowerCase();
-  } else if (isInteractive) {
-    subdomain = await promptSubdomain(port);
-  } else {
-    logger.error(`Port ${port} not in config. Use --subdomain and --zone in non-interactive mode.`);
-    process.exit(1);
-  }
-
-  let zone: string;
-  if (options.zone) {
-    zone = options.zone;
-  } else if (config?.defaultZone) {
-    zone = config.defaultZone;
-  } else if (isInteractive) {
-    const rl = createInterface({ input: process.stdin, output: process.stderr });
-    try {
-      zone = await new Promise<string>((resolve) => {
-        rl.question('Enter zone (domain): ', (a) => resolve(a.trim()));
-      });
-      if (!zone) {
-        logger.error('No zone provided. Run `tuinnel init` to set a default zone.');
-        process.exit(1);
-      }
-    } finally {
-      rl.close();
-    }
-  } else {
-    logger.error('--zone is required (no default zone configured). Run `tuinnel init` first.');
-    process.exit(1);
-  }
-
-  const tunnelConfig: TunnelConfig = { port, subdomain, zone, protocol: 'http' };
-
-  // Save to config for future runs
-  const cfg = config ?? getDefaultConfig();
-  cfg.tunnels[subdomain] = tunnelConfig;
-  writeConfig(cfg);
-
-  return { name: subdomain, tunnelConfig };
-}
-
 async function runNamedTunnels(
   ports: number[],
   token: string,
@@ -214,9 +127,14 @@ async function runNamedTunnels(
     }
 
     if (!found) {
-      // Inline add flow
-      const result = await inlineAddFlow(port, options, config);
-      tunnelsToStart.push(result);
+      // Add tunnel to config via shared flow
+      const result = await addTunnelToConfig({
+        port,
+        subdomain: options.subdomain,
+        zone: options.zone,
+        failOnDuplicate: false,
+      });
+      tunnelsToStart.push({ name: result.name, tunnelConfig: result.config });
     }
   }
 
@@ -246,7 +164,8 @@ async function runNamedTunnels(
 
   if (startedTunnels.length === 0) {
     logger.error('No tunnels started successfully.');
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
 
   // Determine if we should use TUI
@@ -270,48 +189,11 @@ async function runTuiMode(
   startedTunnels: Array<{ name: string; started: StartedTunnel }>,
   token: string,
 ): Promise<void> {
-  const { render } = await import('ink');
-  const { App } = await import('../tui/App.js');
-
-  // Create TunnelService and adopt the already-running tunnels
-  const tunnelService = new TunnelService(token);
-  tunnelService.loadFromConfig();
-
-  for (const { name, started } of startedTunnels) {
-    tunnelService.adopt(name, started.process, {
-      tunnelId: started.tunnelId,
-      connectorToken: started.connectorToken,
-      publicUrl: started.publicUrl,
-    });
-  }
-
-  // Fetch zones for TUI
-  let zones: Array<{ id: string; name: string }> = [];
-  try {
-    const allZones = await getAllZones(token);
-    zones = allZones.map((z) => ({ id: z.id, name: z.name }));
-  } catch {
-    // Continue without zones
-  }
-
-  const config = configExists() ? readConfig() : null;
-  const defaultZone = config?.defaultZone ?? zones[0]?.name ?? '';
-
-  const handleShutdown = async () => {
-    await tunnelService.shutdown();
-  };
-
-  const app = render(
-    React.createElement(App, {
-      tunnelService,
-      zones,
-      defaultZone,
-      onShutdown: handleShutdown,
-      initialMode: 'dashboard' as const,
-    }),
-  );
-
-  await app.waitUntilExit();
+  await launchTui({
+    token,
+    adoptTunnels: startedTunnels,
+    initialMode: 'dashboard',
+  });
 }
 
 // -- No-TUI mode --
@@ -354,10 +236,11 @@ async function runNoTuiMode(
 export async function upCommand(ports: string[], options: UpOptions): Promise<void> {
   if (ports.length === 0) {
     logger.error('No ports specified.\n\nUsage: tuinnel up <port> [port...]');
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
 
-  const parsedPorts = ports.map(validatePort);
+  const parsedPorts = ports.map(p => validatePort(p)!);
   const token = getToken();
   const useQuick = options.quick || !token;
 

@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { Box, Text, useInput } from 'ink';
-import { TextInput, Spinner } from '@inkjs/ui';
+import { Spinner } from '@inkjs/ui';
 import { Modal } from './Modal.js';
+import { MaskedInput } from './MaskedInput.js';
+import { color } from './use-color.js';
 import { validateToken } from '../cloudflare/api.js';
 
 export interface OnboardingWizardProps {
@@ -103,22 +105,21 @@ export function OnboardingWizard({ onComplete, onCancel }: OnboardingWizardProps
           <Text bold>Cloudflare API Token:</Text>
           <Box marginTop={1}>
             <Text dimColor>Create a token at </Text>
-            <Text color="cyan">dash.cloudflare.com/profile/api-tokens</Text>
+            <Text color={color('cyan')}>dash.cloudflare.com/profile/api-tokens</Text>
           </Box>
           <Box marginTop={1}>
             <Text dimColor>Required permissions: Zone:Read, DNS:Edit, Cloudflare Tunnel:Edit</Text>
           </Box>
           <Box marginTop={1}>
-            <Text color="cyan">&gt; </Text>
-            <TextInput
-              defaultValue={token}
+            <Text color={color('cyan')}>&gt; </Text>
+            <MaskedInput
               placeholder="paste token here"
               onSubmit={handleTokenSubmit}
             />
           </Box>
           {tokenError && (
             <Box marginTop={1}>
-              <Text color="red">{tokenError}</Text>
+              <Text color={color('red')}>{tokenError}</Text>
             </Box>
           )}
           <Box marginTop={1}>
@@ -142,7 +143,7 @@ export function OnboardingWizard({ onComplete, onCancel }: OnboardingWizardProps
             {zones.map((z, i) => (
               <Text key={z.id}>
                 {i === selectedZoneIndex ? (
-                  <Text color="cyan">&gt; {z.name}</Text>
+                  <Text color={color('cyan')}>&gt; {z.name}</Text>
                 ) : (
                   <Text>  {z.name}</Text>
                 )}
