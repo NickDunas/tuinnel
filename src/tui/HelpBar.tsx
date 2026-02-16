@@ -1,6 +1,6 @@
 import React from 'react';
 import { Box, Text } from 'ink';
-import { color } from './use-color.js';
+import { StatusMessage } from '@inkjs/ui';
 
 export interface HelpBarProps {
   focusedPanel: 'sidebar' | 'main';
@@ -93,9 +93,12 @@ export function HelpBar(props: HelpBarProps) {
   const { notification } = props;
 
   if (notification) {
+    const isError = notification.startsWith('Error:');
     return (
       <Box>
-        <Text color={color('green')}>{' '}{notification}</Text>
+        <StatusMessage variant={isError ? 'error' : 'success'}>
+          {notification}
+        </StatusMessage>
       </Box>
     );
   }

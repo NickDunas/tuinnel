@@ -63,8 +63,7 @@ describe('DeleteConfirm', () => {
     );
 
     const frame = lastFrame();
-    expect(frame).toContain('Y');
-    expect(frame).toContain('n');
+    expect(frame).toContain('y/N');
   });
 
   test('renders Delete Tunnel title', () => {

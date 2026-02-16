@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Box, Text, useInput } from 'ink';
-import { TextInput } from '@inkjs/ui';
+import { Select, StatusMessage, TextInput } from '@inkjs/ui';
 import { Modal } from './Modal.js';
 
 export interface EditFormProps {
@@ -38,15 +38,6 @@ export function EditForm({ tunnel, zones, onSubmit, onCancel }: EditFormProps) {
       return;
     }
 
-    if (activeField === 'zone') {
-      if (key.upArrow) {
-        setZoneIndex(i => Math.max(0, i - 1));
-      } else if (key.downArrow) {
-        setZoneIndex(i => Math.min(zones.length - 1, i + 1));
-      } else if (key.return) {
-        submitForm();
-      }
-    }
   });
 
   function submitForm() {
@@ -107,7 +98,7 @@ export function EditForm({ tunnel, zones, onSubmit, onCancel }: EditFormProps) {
       <Box flexDirection="column">
         {error && (
           <Box marginBottom={1}>
-            <Text color="red">{error}</Text>
+            <StatusMessage variant="error">{error}</StatusMessage>
           </Box>
         )}
 
@@ -153,17 +144,26 @@ export function EditForm({ tunnel, zones, onSubmit, onCancel }: EditFormProps) {
             Zone:
           </Text>
           {activeField === 'zone' && zones.length > 1 ? (
-            <Box flexDirection="column">
-              {zones.map((z, i) => (
-                <Text key={z.id}>
-                  {i === zoneIndex ? (
-                    <Text color="cyan">&gt; {z.name}</Text>
-                  ) : (
-                    <Text>  {z.name}</Text>
-                  )}
-                </Text>
-              ))}
-            </Box>
+            <Select
+              options={zones.map(z => ({ label: z.name, value: z.name }))}
+              defaultValue={zones[zoneIndex]?.name}
+              onChange={(value) => {
+                const idx = zones.findIndex(z => z.name === value);
+                if (idx >= 0) setZoneIndex(idx);
+                const num = parseInt(port, 10);
+                if (isNaN(num) || num < 1 || num > 65535) {
+                  setActiveField('port');
+                  setError('Port must be 1-65535');
+                  return;
+                }
+                if (!subdomain.trim()) {
+                  setActiveField('subdomain');
+                  setError('Subdomain is required');
+                  return;
+                }
+                onSubmit({ port: num, subdomain: subdomain.trim(), zone: value });
+              }}
+            />
           ) : (
             <Text>  {zones[zoneIndex]?.name ?? tunnel.zone}</Text>
           )}

@@ -1,5 +1,6 @@
 import React from 'react';
-import { Box, Text, useInput } from 'ink';
+import { Box, Text } from 'ink';
+import { ConfirmInput } from '@inkjs/ui';
 import { Modal } from './Modal.js';
 
 export interface DeleteConfirmProps {
@@ -11,14 +12,6 @@ export interface DeleteConfirmProps {
 }
 
 export function DeleteConfirm({ tunnelName, subdomain, zone, onConfirm, onCancel }: DeleteConfirmProps) {
-  useInput((input, key) => {
-    if (input === 'y' || input === 'Y' || key.return) {
-      onConfirm();
-    } else if (input === 'n' || input === 'N' || key.escape) {
-      onCancel();
-    }
-  });
-
   return (
     <Modal title="Delete Tunnel" visible>
       <Box flexDirection="column">
@@ -36,14 +29,7 @@ export function DeleteConfirm({ tunnelName, subdomain, zone, onConfirm, onCancel
         <Text>delete the associated DNS CNAME record.</Text>
 
         <Box marginTop={1}>
-          <Text>Continue? </Text>
-          <Text bold color="red">Y</Text>
-          <Text>/</Text>
-          <Text bold>n</Text>
-        </Box>
-
-        <Box marginTop={1}>
-          <Text dimColor>Y/Enter to confirm, n/Esc to cancel</Text>
+          <ConfirmInput defaultChoice="cancel" onConfirm={onConfirm} onCancel={onCancel} />
         </Box>
       </Box>
     </Modal>

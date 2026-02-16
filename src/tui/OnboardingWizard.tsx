@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import { Box, Text, useInput } from 'ink';
-import { Spinner } from '@inkjs/ui';
+import { Spinner, Select, PasswordInput, StatusMessage } from '@inkjs/ui';
 import { Modal } from './Modal.js';
-import { MaskedInput } from './MaskedInput.js';
 import { color } from './use-color.js';
 import { validateToken } from '../cloudflare/api.js';
 
@@ -24,27 +23,10 @@ export function OnboardingWizard({ onComplete, onCancel }: OnboardingWizardProps
   const [token, setToken] = useState('');
   const [tokenError, setTokenError] = useState<string | null>(null);
   const [zones, setZones] = useState<ZoneInfo[]>([]);
-  const [selectedZoneIndex, setSelectedZoneIndex] = useState(0);
 
-  useInput((input, key) => {
+  useInput((_input, key) => {
     if (key.escape) {
       onCancel();
-      return;
-    }
-
-    if (step === 'zone') {
-      if (key.upArrow) {
-        setSelectedZoneIndex(i => Math.max(0, i - 1));
-      } else if (key.downArrow) {
-        setSelectedZoneIndex(i => Math.min(zones.length - 1, i + 1));
-      } else if (key.return) {
-        const selected = zones[selectedZoneIndex];
-        onComplete({
-          apiToken: token,
-          defaultZone: selected.name,
-          accountId: selected.accountId,
-        });
-      }
     }
   });
 
@@ -111,15 +93,11 @@ export function OnboardingWizard({ onComplete, onCancel }: OnboardingWizardProps
             <Text dimColor>Required permissions: Zone:Read, DNS:Edit, Cloudflare Tunnel:Edit</Text>
           </Box>
           <Box marginTop={1}>
-            <Text color={color('cyan')}>&gt; </Text>
-            <MaskedInput
-              placeholder="paste token here"
-              onSubmit={handleTokenSubmit}
-            />
+            <PasswordInput placeholder="paste token here" onSubmit={handleTokenSubmit} />
           </Box>
           {tokenError && (
             <Box marginTop={1}>
-              <Text color={color('red')}>{tokenError}</Text>
+              <StatusMessage variant="error">{tokenError}</StatusMessage>
             </Box>
           )}
           <Box marginTop={1}>
@@ -139,16 +117,14 @@ export function OnboardingWizard({ onComplete, onCancel }: OnboardingWizardProps
       {step === 'zone' && (
         <Box flexDirection="column">
           <Text bold>Select your default zone:</Text>
-          <Box flexDirection="column" marginTop={1}>
-            {zones.map((z, i) => (
-              <Text key={z.id}>
-                {i === selectedZoneIndex ? (
-                  <Text color={color('cyan')}>&gt; {z.name}</Text>
-                ) : (
-                  <Text>  {z.name}</Text>
-                )}
-              </Text>
-            ))}
+          <Box marginTop={1}>
+            <Select
+              options={zones.map(z => ({ label: z.name, value: z.name }))}
+              onChange={(value) => {
+                const zone = zones.find(z => z.name === value);
+                if (zone) onComplete({ apiToken: token, defaultZone: zone.name, accountId: zone.accountId });
+              }}
+            />
           </Box>
           <Box marginTop={1}>
             <Text dimColor>Up/Down to select, Enter to confirm, Esc to cancel</Text>

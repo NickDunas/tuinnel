@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Box, Text, useInput } from 'ink';
-import { TextInput } from '@inkjs/ui';
+import { Select, StatusMessage, TextInput } from '@inkjs/ui';
 import { Modal } from './Modal.js';
 import { suggestSubdomain } from '../config/port-map.js';
 import { validatePort, validateSubdomain } from '../utils/validation.js';
@@ -19,29 +19,11 @@ export function AddWizard({ defaultZone, zones, onSubmit, onCancel }: AddWizardP
   const [port, setPort] = useState('');
   const [portError, setPortError] = useState<string | null>(null);
   const [subdomain, setSubdomain] = useState('');
-  const [selectedZoneIndex, setSelectedZoneIndex] = useState(() => {
-    const idx = zones.findIndex(z => z.name === defaultZone);
-    return idx >= 0 ? idx : 0;
-  });
 
   useInput((input, key) => {
     if (key.escape) {
       onCancel();
       return;
-    }
-
-    if (step === 'zone') {
-      if (key.upArrow) {
-        setSelectedZoneIndex(i => Math.max(0, i - 1));
-      } else if (key.downArrow) {
-        setSelectedZoneIndex(i => Math.min(zones.length - 1, i + 1));
-      } else if (key.return) {
-        onSubmit({
-          port: parseInt(port, 10),
-          subdomain,
-          zone: zones[selectedZoneIndex].name,
-        });
-      }
     }
   });
 
@@ -98,7 +80,7 @@ export function AddWizard({ defaultZone, zones, onSubmit, onCancel }: AddWizardP
           </Box>
           {portError && (
             <Box marginTop={1}>
-              <Text color="red">{portError}</Text>
+              <StatusMessage variant="error">{portError}</StatusMessage>
             </Box>
           )}
           <Box marginTop={1}>
@@ -127,16 +109,18 @@ export function AddWizard({ defaultZone, zones, onSubmit, onCancel }: AddWizardP
       {step === 'zone' && (
         <Box flexDirection="column">
           <Text bold>Select zone:</Text>
-          <Box flexDirection="column" marginTop={1}>
-            {zones.map((z, i) => (
-              <Text key={z.id}>
-                {i === selectedZoneIndex ? (
-                  <Text color="cyan">&gt; {z.name}</Text>
-                ) : (
-                  <Text>  {z.name}</Text>
-                )}
-              </Text>
-            ))}
+          <Box marginTop={1}>
+            <Select
+              options={zones.map(z => ({ label: z.name, value: z.name }))}
+              defaultValue={defaultZone}
+              onChange={(value) => {
+                onSubmit({
+                  port: parseInt(port, 10),
+                  subdomain,
+                  zone: value,
+                });
+              }}
+            />
           </Box>
           <Box marginTop={1}>
             <Text dimColor>Up/Down to select, Enter to confirm, Esc to cancel</Text>

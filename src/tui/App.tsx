@@ -1,5 +1,6 @@
 import React, { useReducer, useEffect } from 'react';
 import { Box, Text, useInput, useStdin, useStdout, useApp } from 'ink';
+import { ThemeProvider } from '@inkjs/ui';
 import { spawn as spawnChild } from 'child_process';
 import { platform } from 'os';
 import type { TunnelRuntime } from '../types.js';
@@ -15,6 +16,7 @@ import { DeleteConfirm } from './DeleteConfirm.js';
 import { EditForm } from './EditForm.js';
 import { OnboardingWizard } from './OnboardingWizard.js';
 import { useMetrics } from './hooks/useMetrics.js';
+import { tuinnelTheme } from './theme.js';
 
 // -- State --
 
@@ -441,138 +443,148 @@ export function App({ tunnelService, zones, defaultZone, onShutdown, initialMode
   // Onboarding
   if (state.mode === 'onboarding') {
     return (
-      <OnboardingWizard
-        onComplete={handleOnboardingComplete}
-        onCancel={handleOnboardingCancel}
-      />
+      <ThemeProvider theme={tuinnelTheme}>
+        <OnboardingWizard
+          onComplete={handleOnboardingComplete}
+          onCancel={handleOnboardingCancel}
+        />
+      </ThemeProvider>
     );
   }
 
   // Quit confirmation
   if (state.mode === 'quitting') {
     return (
-      <Box flexDirection="column">
-        <Text>Stop all tunnels and exit? Tunnels remain on CF for fast restart. (Y/n)</Text>
-      </Box>
+      <ThemeProvider theme={tuinnelTheme}>
+        <Box flexDirection="column">
+          <Text>Stop all tunnels and exit? Tunnels remain on CF for fast restart. (Y/n)</Text>
+        </Box>
+      </ThemeProvider>
     );
   }
 
   // Help overlay
   if (state.showHelp) {
     return (
-      <Box flexDirection="column" padding={1}>
-        <Text bold>Keyboard Shortcuts</Text>
-        <Text> </Text>
-        <Text>  Up/Down/j/k Navigate tunnels</Text>
-        <Text>  Tab         Switch focus: sidebar / main</Text>
-        <Text>  1/2/3       Switch tab: details / logs / metrics</Text>
-        <Text>  a           Add tunnel</Text>
-        <Text>  e           Edit selected tunnel</Text>
-        <Text>  d           Delete selected tunnel</Text>
-        <Text>  s           Start/Stop toggle</Text>
-        <Text>  r           Restart selected tunnel</Text>
-        <Text>  c           Copy public URL</Text>
-        <Text>  o           Open URL in browser</Text>
-        <Text>  /           Filter logs</Text>
-        <Text>  ?           Toggle this help</Text>
-        <Text>  q           Quit</Text>
-        <Text>  Ctrl+C      Force quit</Text>
-        <Text> </Text>
-        <Text dimColor>Press any key to close</Text>
-      </Box>
+      <ThemeProvider theme={tuinnelTheme}>
+        <Box flexDirection="column" padding={1}>
+          <Text bold>Keyboard Shortcuts</Text>
+          <Text> </Text>
+          <Text>  Up/Down/j/k Navigate tunnels</Text>
+          <Text>  Tab         Switch focus: sidebar / main</Text>
+          <Text>  1/2/3       Switch tab: details / logs / metrics</Text>
+          <Text>  a           Add tunnel</Text>
+          <Text>  e           Edit selected tunnel</Text>
+          <Text>  d           Delete selected tunnel</Text>
+          <Text>  s           Start/Stop toggle</Text>
+          <Text>  r           Restart selected tunnel</Text>
+          <Text>  c           Copy public URL</Text>
+          <Text>  o           Open URL in browser</Text>
+          <Text>  /           Filter logs</Text>
+          <Text>  ?           Toggle this help</Text>
+          <Text>  q           Quit</Text>
+          <Text>  Ctrl+C      Force quit</Text>
+          <Text> </Text>
+          <Text dimColor>Press any key to close</Text>
+        </Box>
+      </ThemeProvider>
     );
   }
 
   // Empty state (no tunnels)
   if (state.mode === 'empty') {
     return (
+      <ThemeProvider theme={tuinnelTheme}>
+        <Box flexDirection="column" width={columns} height={rows}>
+          {state.activeModal === 'add' ? (
+            <AddWizard
+              defaultZone={defaultZone}
+              zones={zones}
+              onSubmit={handleAddSubmit}
+              onCancel={handleModalCancel}
+            />
+          ) : (
+            <EmptyState width={columns} height={rows - 1} />
+          )}
+          <HelpBar
+            focusedPanel={state.focusedPanel}
+            notification={state.notification}
+            activeModal={state.activeModal}
+            activeTab={state.activeTab}
+            hasSelection={false}
+            mode="empty"
+          />
+        </Box>
+      </ThemeProvider>
+    );
+  }
+
+  // Dashboard with optional modal overlays
+  return (
+    <ThemeProvider theme={tuinnelTheme}>
       <Box flexDirection="column" width={columns} height={rows}>
-        {state.activeModal === 'add' ? (
+        {state.activeModal === 'add' && (
           <AddWizard
             defaultZone={defaultZone}
             zones={zones}
             onSubmit={handleAddSubmit}
             onCancel={handleModalCancel}
           />
-        ) : (
-          <EmptyState width={columns} height={rows - 1} />
         )}
-        <HelpBar
-          focusedPanel={state.focusedPanel}
-          notification={state.notification}
-          activeModal={state.activeModal}
-          activeTab={state.activeTab}
-          hasSelection={false}
-          mode="empty"
-        />
-      </Box>
-    );
-  }
-
-  // Dashboard with optional modal overlays
-  return (
-    <Box flexDirection="column" width={columns} height={rows}>
-      {state.activeModal === 'add' && (
-        <AddWizard
-          defaultZone={defaultZone}
-          zones={zones}
-          onSubmit={handleAddSubmit}
-          onCancel={handleModalCancel}
-        />
-      )}
-      {state.activeModal === 'edit' && selectedRuntime && (
-        <EditForm
-          tunnel={{
-            name: selectedRuntime.name,
-            port: selectedRuntime.config.port,
-            subdomain: selectedRuntime.config.subdomain,
-            zone: selectedRuntime.config.zone,
-          }}
-          zones={zones}
-          onSubmit={handleEditSubmit}
-          onCancel={handleModalCancel}
-        />
-      )}
-      {state.activeModal === 'delete' && selectedRuntime && (
-        <DeleteConfirm
-          tunnelName={selectedRuntime.name}
-          subdomain={selectedRuntime.config.subdomain}
-          zone={selectedRuntime.config.zone}
-          onConfirm={handleDeleteConfirm}
-          onCancel={handleModalCancel}
-        />
-      )}
-      {state.activeModal === null && (
-        <>
-          <Box flexDirection="row" flexGrow={1}>
-            {!isSingleTunnel && !isNarrow && (
-              <Sidebar
-                tunnels={tunnelList}
-                selectedTunnel={state.selectedTunnel}
-                focused={state.focusedPanel === 'sidebar'}
-                height={rows - 1}
-              />
-            )}
-            <MainPanel
-              tunnel={selectedRuntime}
-              focused={state.focusedPanel === 'main' || isSingleTunnel}
-              activeTab={state.activeTab}
-              logFilter={null}
-              logPaused={false}
-              metrics={metrics}
-              metricsAddr={metricsAddr}
-            />
-          </Box>
-          <HelpBar
-            focusedPanel={state.focusedPanel}
-            notification={state.notification}
-            activeModal={state.activeModal}
-            activeTab={state.activeTab}
-            hasSelection={!!selectedRuntime}
-            mode="dashboard"
+        {state.activeModal === 'edit' && selectedRuntime && (
+          <EditForm
+            tunnel={{
+              name: selectedRuntime.name,
+              port: selectedRuntime.config.port,
+              subdomain: selectedRuntime.config.subdomain,
+              zone: selectedRuntime.config.zone,
+            }}
+            zones={zones}
+            onSubmit={handleEditSubmit}
+            onCancel={handleModalCancel}
           />
-        </>
-      )}
-    </Box>
+        )}
+        {state.activeModal === 'delete' && selectedRuntime && (
+          <DeleteConfirm
+            tunnelName={selectedRuntime.name}
+            subdomain={selectedRuntime.config.subdomain}
+            zone={selectedRuntime.config.zone}
+            onConfirm={handleDeleteConfirm}
+            onCancel={handleModalCancel}
+          />
+        )}
+        {state.activeModal === null && (
+          <>
+            <Box flexDirection="row" flexGrow={1}>
+              {!isSingleTunnel && !isNarrow && (
+                <Sidebar
+                  tunnels={tunnelList}
+                  selectedTunnel={state.selectedTunnel}
+                  focused={state.focusedPanel === 'sidebar'}
+                  height={rows - 1}
+                />
+              )}
+              <MainPanel
+                tunnel={selectedRuntime}
+                focused={state.focusedPanel === 'main' || isSingleTunnel}
+                activeTab={state.activeTab}
+                logFilter={null}
+                logPaused={false}
+                metrics={metrics}
+                metricsAddr={metricsAddr}
+              />
+            </Box>
+            <HelpBar
+              focusedPanel={state.focusedPanel}
+              notification={state.notification}
+              activeModal={state.activeModal}
+              activeTab={state.activeTab}
+              hasSelection={!!selectedRuntime}
+              mode="dashboard"
+            />
+          </>
+        )}
+      </Box>
+    </ThemeProvider>
   );
 }
